@@ -1,4 +1,4 @@
-# Last updated: 2020-03-23
+# Last updated: 2020-03-24
 # Author: Cong Liu
 # plot figures for PRS project.
 
@@ -21,7 +21,10 @@ point_estimator_plot = function(dt, stratify=NULL){
       coord_flip() + 
       theme_bw() + 
       theme(legend.position="right") +
-      xlab("")
+      xlab("") + 
+      scale_x_discrete(labels=c("eu" = "European", 
+                                "la" = "Latina",
+                                "aa" = "African American"))
   if(!is.null(stratify)){
     warning("stratified by : ", stratify)
     pe_plot = pe_plot + facet_wrap(~get(stratify),scales = "free")
@@ -40,6 +43,9 @@ quantile_plot = function(dt){
     theme_bw() + 
     theme(legend.position="right") +
     xlab("") + 
+    scale_x_discrete(labels=c("eu" = "European", 
+                              "la" = "Latina",
+                              "aa" = "African American"))
     theme(axis.text.x = element_text(angle = 90, hjust = 1,size = 13)) + 
     facet_wrap(~ancestry,scales = 'free',ncol = 3)
   return(qt_plot)

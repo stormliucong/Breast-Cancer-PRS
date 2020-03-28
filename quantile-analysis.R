@@ -1,4 +1,4 @@
-# Last updated: 2020-03-23
+# Last updated: 2020-03-24
 # Author: Cong Liu
 # quantile analysis for PRS project
 
@@ -15,8 +15,10 @@ library(fmsb)
 
 
 # read merged table.
+# read merged table.
 merged_table = fread('~/2019-PRS-pipeline/workplace/merged_table.txt')
-colnames(merged_table)
+colnames(merged_table)[4] = 'sex'
+merged_table = merged_table[demo_is_consist == 1]
 
 # prs normalization to SD = 1 MEAN = 0 in the control group.
 prs_norm = function(dt, prs_col, case_control_col = 'phekb_case_control') {
@@ -103,6 +105,12 @@ add_prs_quantile = function(dt,ancestry){
   
 }
 
+add_extrem_bin = function(dt,ancestry){
+  if(ancestry == 'eu'){
+    dt[is.na(quantile), extreme := '<20%']
+  }
+}
+
 # clean glm results.
 # clean glm results.
 clean_results = function(glm_model = NULL,
@@ -177,6 +185,16 @@ run_glm = function(dt){
   })
 }
 
+get_extreme_bin = function(ancestry){
+  if(ancestry == 'eu'){
+    extreme_bin = c('>=80%','>=90%',">=95%",">=99%")
+    qt_bin = c('80-90%','90-95%','95-99%','>=99%')
+  }else{
+    extreme_bin = c('>=80%')
+    qt_bin = c(">=80%")
+  }
+  return(list(extreme_bin,qt_bin))
+}
 
 # primary analysis
 primary_subset_col = c(1,4,5,17:27,28,32,33,50:52,65:82)
@@ -188,7 +206,7 @@ primary_subset = primary_subset[sex %in% c('male','female')]
 primary_analysis_results = NULL
 for(p in prs_names){
   for(a in c('eu','aa','la')){
-    for(s in c('male','female')){
+    for(s in c('female')){
       working_subset = copy(primary_subset)
       working_subset = working_subset[sex==s & emerge_ancestry==a]
       working_subset = prs_norm(working_subset,prs_col = p,case_control_col = 'phekb_case_control')
@@ -211,40 +229,40 @@ for(p in prs_names){
 }
 primary_analysis_results %>% fwrite('~/2019-PRS-pipeline/workplace/primary_analysis_qt.csv')
 
-# primary analysis - sensitivity analysis
-# s1 - results in ICD defined case-control
-sensitivity_subset_col = c(1, 4, 5, 17:27, 43, 41, 33, 50:52,65:82)
-prs_names = colnames(merged_table)[c(50:52,65:82)]
-sensitivity_subset = merged_table[, sensitivity_subset_col, with = FALSE]
-sensitivity_subset = sensitivity_subset[icd_case_control %in% c('case', 'control')]
-sensitivity_subset = sensitivity_subset[emerge_ancestry %in% c('eu', 'aa', 'la')]
-sensitivity_subset = sensitivity_subset[sex %in% c('male', 'female')]
-sensitivity_analysis_results = NULL
-for (p in prs_names) {
-  for (a in c('eu', 'aa', 'la')) {
-    for (s in c('male', 'female')) {
-      working_subset = copy(sensitivity_subset)
-      working_subset = working_subset[sex == s & emerge_ancestry == a]
-      working_subset = prs_norm(working_subset, prs_col = p, case_control_col = 'icd_case_control')
-      working_subset = add_prs_quantile(working_subset,ancestry = a)
-      working_subset = working_subset[,.(case_control,quantile,ancestry_specific_pc1,ancestry_specific_pc2,
-                                         ancestry_specific_pc3,
-                                         year_birth,site,phekb_family_history)]
-      for(q in unique(working_subset$quantile)){
-        if(q != '40-60%'){
-          working_subset_q = working_subset[quantile == q | quantile == '40-60%']
-          working_subset_q[,quantile:=factor(quantile,levels = c('40-60%',q))]
-          working_subset_q = clean_column(working_subset_q)
-          glm_model = run_glm(working_subset_q)
-          dt = clean_results(glm_model = glm_model,working_subset_q = working_subset_q, prs_col = p,quantile = q,sex = s,ancestry = a)
-          sensitivity_analysis_results = rbindlist(list(dt, sensitivity_analysis_results), fill = TRUE)
-          
-        }
-      } 
-    }
-  }
-}
-sensitivity_analysis_results %>% fwrite('~/2019-PRS-pipeline/workplace/sensitivity_analysis_icd_qt.csv')
+# # primary analysis - sensitivity analysis
+# # s1 - results in ICD defined case-control
+# sensitivity_subset_col = c(1, 4, 5, 17:27, 43, 41, 33, 50:52,65:82)
+# prs_names = colnames(merged_table)[c(50:52,65:82)]
+# sensitivity_subset = merged_table[, sensitivity_subset_col, with = FALSE]
+# sensitivity_subset = sensitivity_subset[icd_case_control %in% c('case', 'control')]
+# sensitivity_subset = sensitivity_subset[emerge_ancestry %in% c('eu', 'aa', 'la')]
+# sensitivity_subset = sensitivity_subset[sex %in% c('male', 'female')]
+# sensitivity_analysis_results = NULL
+# for (p in prs_names) {
+#   for (a in c('eu', 'aa', 'la')) {
+#     for (s in c('male', 'female')) {
+#       working_subset = copy(sensitivity_subset)
+#       working_subset = working_subset[sex == s & emerge_ancestry == a]
+#       working_subset = prs_norm(working_subset, prs_col = p, case_control_col = 'icd_case_control')
+#       working_subset = add_prs_quantile(working_subset,ancestry = a)
+#       working_subset = working_subset[,.(case_control,quantile,ancestry_specific_pc1,ancestry_specific_pc2,
+#                                          ancestry_specific_pc3,
+#                                          year_birth,site,phekb_family_history)]
+#       for(q in unique(working_subset$quantile)){
+#         if(q != '40-60%'){
+#           working_subset_q = working_subset[quantile == q | quantile == '40-60%']
+#           working_subset_q[,quantile:=factor(quantile,levels = c('40-60%',q))]
+#           working_subset_q = clean_column(working_subset_q)
+#           glm_model = run_glm(working_subset_q)
+#           dt = clean_results(glm_model = glm_model,working_subset_q = working_subset_q, prs_col = p,quantile = q,sex = s,ancestry = a)
+#           sensitivity_analysis_results = rbindlist(list(dt, sensitivity_analysis_results), fill = TRUE)
+#           
+#         }
+#       } 
+#     }
+#   }
+# }
+# sensitivity_analysis_results %>% fwrite('~/2019-PRS-pipeline/workplace/sensitivity_analysis_icd_qt.csv')
 
 # s2 - comparing w/ reminder population.
 sensitivity_subset_col = c(1, 4, 5, 17:27, 28, 32, 33, 50:52,65:82)
@@ -254,25 +272,26 @@ sensitivity_subset = sensitivity_subset[phekb_case_control %in% c('case', 'contr
 sensitivity_subset = sensitivity_subset[emerge_ancestry %in% c('eu', 'aa', 'la')]
 sensitivity_subset = sensitivity_subset[sex %in% c('male', 'female')]
 sensitivity_analysis_results = NULL
+
 for (p in prs_names) {
-  for (a in c('eu', 'aa', 'la')) {
-    for (s in c('male', 'female')) {
+  for (a in c('eu','la','aa')) {
+    for (s in c('female')) {
       working_subset = copy(sensitivity_subset)
       working_subset = working_subset[sex == s & emerge_ancestry == a]
       working_subset = prs_norm(working_subset, prs_col = p, case_control_col = 'phekb_case_control')
       working_subset = add_prs_quantile(working_subset,ancestry = a)
-      for(q in unique(working_subset$quantile)){
-        working_subset_q = working_subset[quantile == q | quantile == '40-60%']
-        working_subset_q[quantile != q,quantile_class:= 0]
-        working_subset_q[quantile == q,quantile_class:= 1]
+      extreme_bin = get_extreme_bin(ancestry = a)[[1]]
+      qt_bin = get_extreme_bin(ancestry = a)[[2]]
+      for(q in 1:length(extreme_bin)){
+        working_subset_q = copy(working_subset)
+        working_subset_q[quantile %in% qt_bin[q:length(extreme_bin)],quantile_class:= 1][is.na(quantile_class),quantile_class:=0]
         working_subset_q = working_subset_q[,.(case_control,quantile_class,ancestry_specific_pc1,ancestry_specific_pc2,
                                            ancestry_specific_pc3,
                                            phekb_age,site,phekb_family_history)]
         working_subset_q = clean_column(working_subset_q)
         glm_model = run_glm(working_subset_q)
-        dt = clean_results(glm_model = glm_model, working_subset_q = working_subset_q, prs_col = p,quantile = q,sex = s,ancestry = a)
+        dt = clean_results(glm_model = glm_model, working_subset_q = working_subset_q, prs_col = p,quantile = extreme_bin[q],sex = s,ancestry = a)
         sensitivity_analysis_results = rbindlist(list(dt, sensitivity_analysis_results), fill = TRUE)
-        
       } 
     }
   }
@@ -280,197 +299,197 @@ for (p in prs_names) {
 sensitivity_analysis_results %>% fwrite('~/2019-PRS-pipeline/workplace/sensitivity_analysis_overall_qt.csv')
 
 
-# stratified analysis.
-# site.
-stratify_subset_col = c(1,4,5,17:27,28,32,33,50:52,65:82)
-prs_names = colnames(merged_table)[c(50:52,65:82)]
-stratify_subset = merged_table[, stratify_subset_col, with = FALSE]
-stratify_subset = stratify_subset[phekb_case_control %in% c('case', 'control')]
-stratify_subset = stratify_subset[emerge_ancestry %in% c('eu', 'aa', 'la')]
-stratify_subset = stratify_subset[sex %in% c('male', 'female')]
-stratify_analysis_results = NULL
-for (p in prs_names) {
-  for (a in c('eu', 'aa', 'la')) {
-    for (s in c('male', 'female')) {
-      for (st in c("mrsh",
-                   "vand",
-                   "kpuw",
-                   "colu",
-                   "mayo",
-                   "nwun",
-                   "geis",
-                   "harv")) {
-        working_subset = copy(stratify_subset)
-        working_subset = working_subset[sex == s & emerge_ancestry == a & site == st]
-        working_subset = prs_norm(working_subset, prs_col = p, case_control_col = 'phekb_case_control')
-        working_subset = add_prs_quantile(working_subset,ancestry = a)
-        if(!is.null(working_subset)){
-          working_subset = working_subset[,.(case_control,quantile,ancestry_specific_pc1,ancestry_specific_pc2,
-                                             ancestry_specific_pc3,
-                                             phekb_age,site,phekb_family_history)]
-          for(q in unique(working_subset$quantile)){
-            if(q != '40-60%'){
-              working_subset_q = working_subset[quantile == q | quantile == '40-60%']
-              working_subset_q[,quantile:=factor(quantile,levels = c('40-60%',q))]
-              working_subset_q = clean_column(working_subset_q)
-              glm_model = run_glm(working_subset_q)
-              dt = clean_results(glm_model = glm_model, working_subset_q = working_subset_q, prs_col = p,quantile = q,sex = s,ancestry = a, site = st)
-              stratify_analysis_results = rbindlist(list(dt, stratify_analysis_results), fill=TRUE)
-              
-            }
-          }
-        }
-      }
-    }
-  }
-}
-stratify_analysis_results %>% fwrite('~/2019-PRS-pipeline/workplace/stratify_analysis_site_qt.csv')
-
-# family history
-stratify_subset_col = c(1,4,5,17:27,28,32,33,50:52,65:82)
-prs_names = colnames(merged_table)[c(50:52,65:82)]
-stratify_subset = merged_table[, stratify_subset_col, with = FALSE]
-stratify_subset = stratify_subset[phekb_case_control %in% c('case', 'control')]
-stratify_subset = stratify_subset[emerge_ancestry %in% c('eu', 'aa', 'la')]
-stratify_subset = stratify_subset[sex %in% c('male', 'female')]
-stratify_analysis_results = NULL
-for (p in prs_names) {
-  for (a in c('eu', 'aa', 'la')) {
-    for (s in c('male', 'female')) {
-      for (st in c("wo_fx", "w_fx")) {
-        working_subset = copy(stratify_subset)
-        working_subset = working_subset[sex == s &
-                                          emerge_ancestry == a
-                                        &
-                                          ((
-                                            phekb_case_control == 'case' & phekb_family_history == st
-                                          )
-                                          |
-                                            phekb_case_control == 'control'
-                                          )]
-        working_subset = prs_norm(working_subset,
-                                  prs_col = p,
-                                  case_control_col = 'phekb_case_control')
-        working_subset = add_prs_quantile(working_subset,ancestry = a)
-        
-        if(!is.null(working_subset)){
-          working_subset = working_subset[,.(case_control,quantile,ancestry_specific_pc1,ancestry_specific_pc2,
-                                             ancestry_specific_pc3,
-                                             phekb_age,site,phekb_family_history)]
-          for(q in unique(working_subset$quantile)){
-            if(q != '40-60%'){
-              working_subset_q = working_subset[quantile == q | quantile == '40-60%']
-              working_subset_q[,quantile:=factor(quantile,levels = c('40-60%',q))]
-              working_subset_q = clean_column(working_subset_q)
-              glm_model = run_glm(working_subset_q)
-              dt = clean_results(glm_model = glm_model, working_subset_q = working_subset_q, prs_col = p,quantile = q,sex = s,ancestry = a, family_history = st)
-              stratify_analysis_results = rbindlist(list(dt, stratify_analysis_results), fill=TRUE)
-              
-            }
-          }
-        }
-      }
-    }
-  }
-}
-stratify_analysis_results %>% fwrite('~/2019-PRS-pipeline/workplace/stratify_analysis_fx_qt.csv')
-
-# subtype
-stratify_subset_col = c(1,4,5,17:27,28,32,33,36,44:82)
-prs_names = colnames(merged_table)[44:82]
-stratify_subset = merged_table[, stratify_subset_col, with = FALSE]
-stratify_subset = stratify_subset[phekb_case_control %in% c('case', 'control')]
-stratify_subset = stratify_subset[emerge_ancestry %in% c('eu', 'aa', 'la')]
-stratify_subset = stratify_subset[sex %in% c('male', 'female')]
-stratify_analysis_results = NULL
-for (p in prs_names) {
-  for (a in c('eu', 'aa', 'la')) {
-    for (s in c('male', 'female')) {
-      for (st in c('positive', 'negative')) {
-        working_subset = copy(stratify_subset)
-        working_subset = working_subset[sex == s &
-                                          emerge_ancestry == a
-                                        &
-                                          ((
-                                            phekb_case_control == 'case' & hormone_receptor_string_value == st
-                                          )
-                                          |
-                                            phekb_case_control == 'control'
-                                          )]
-        working_subset = prs_norm(working_subset,
-                                  prs_col = p,
-                                  case_control_col = 'phekb_case_control')
-        working_subset = add_prs_quantile(working_subset,ancestry = a)
-        
-        if(!is.null(working_subset)){
-          working_subset = working_subset[,.(case_control,quantile,ancestry_specific_pc1,ancestry_specific_pc2,
-                                             ancestry_specific_pc3,
-                                             phekb_age,site,phekb_family_history,hormone_receptor_string_value)]
-          for(q in unique(working_subset$quantile)){
-            if(q != '40-60%'){
-              working_subset_q = working_subset[quantile == q | quantile == '40-60%']
-              working_subset_q[,quantile:=factor(quantile,levels = c('40-60%',q))]
-              working_subset_q = clean_column(working_subset_q)
-              glm_model = run_glm(working_subset_q)
-              dt = clean_results(glm_model = glm_model, working_subset_q = working_subset_q, prs_col = p,quantile = q,sex = s,ancestry = a, subtype = st)
-              stratify_analysis_results = rbindlist(list(dt, stratify_analysis_results), fill=TRUE)
-              
-            }
-          }
-        }
-      }
-    }
-  }
-}
-stratify_analysis_results %>% fwrite('~/2019-PRS-pipeline/workplace/stratify_analysis_subtype_qt.csv')
-
-# density
-stratify_subset_col = c(1,4,5,17:27,28,32,33,50:52,65:82,38)
-prs_names = colnames(merged_table)[c(50:52,65:82)]
-stratify_subset = merged_table[, stratify_subset_col, with = FALSE]
-stratify_subset = stratify_subset[phekb_case_control %in% c('case', 'control')]
-stratify_subset = stratify_subset[emerge_ancestry %in% c('eu', 'aa', 'la')]
-stratify_subset = stratify_subset[sex %in% c('male', 'female')]
-stratify_analysis_results = NULL
-for (p in prs_names) {
-  for (a in c('eu', 'aa', 'la')) {
-    for (s in c('male', 'female')) {
-      for (st in c('scattered_fibro_dens',
-                   'hetero_dense',
-                   'extremely_dense',
-                   'entirely_fat')) {
-        working_subset = copy(stratify_subset)
-        working_subset = working_subset[sex == s &
-                                          emerge_ancestry == a
-                                        &
-                                          ((phekb_case_control == 'case' & breast_density == st)
-                                           |
-                                             phekb_case_control == 'control'
-                                          )]
-        working_subset = prs_norm(working_subset,
-                                  prs_col = p,
-                                  case_control_col = 'phekb_case_control')
-        working_subset = add_prs_quantile(working_subset,ancestry = a)
-        if(!is.null(working_subset)){
-          for(q in unique(working_subset$quantile)){
-            working_subset = working_subset[,.(case_control,quantile,ancestry_specific_pc1,ancestry_specific_pc2,
-                                               ancestry_specific_pc3,
-                                               phekb_age,site,phekb_family_history,breast_density)]
-            if(q != '40-60%'){
-              working_subset_q = working_subset[quantile == q | quantile == '40-60%']
-              working_subset_q[,quantile:=factor(quantile,levels = c('40-60%',q))]
-              working_subset_q = clean_column(working_subset_q)
-              glm_model = run_glm(working_subset_q)
-              dt = clean_results(glm_model = glm_model, working_subset_q = working_subset_q, prs_col = p,quantile = q,sex = s,ancestry = a, density = st)
-              stratify_analysis_results = rbindlist(list(dt, stratify_analysis_results), fill=TRUE)
-              
-            }
-          }
-        }
-      }
-    }
-  }
-}
-stratify_analysis_results %>% fwrite('~/2019-PRS-pipeline/workplace/stratify_analysis_density_qt.csv')
+# # stratified analysis.
+# # site.
+# stratify_subset_col = c(1,4,5,17:27,28,32,33,50:52,65:82)
+# prs_names = colnames(merged_table)[c(50:52,65:82)]
+# stratify_subset = merged_table[, stratify_subset_col, with = FALSE]
+# stratify_subset = stratify_subset[phekb_case_control %in% c('case', 'control')]
+# stratify_subset = stratify_subset[emerge_ancestry %in% c('eu', 'aa', 'la')]
+# stratify_subset = stratify_subset[sex %in% c('male', 'female')]
+# stratify_analysis_results = NULL
+# for (p in prs_names) {
+#   for (a in c('eu', 'aa', 'la')) {
+#     for (s in c('male', 'female')) {
+#       for (st in c("mrsh",
+#                    "vand",
+#                    "kpuw",
+#                    "colu",
+#                    "mayo",
+#                    "nwun",
+#                    "geis",
+#                    "harv")) {
+#         working_subset = copy(stratify_subset)
+#         working_subset = working_subset[sex == s & emerge_ancestry == a & site == st]
+#         working_subset = prs_norm(working_subset, prs_col = p, case_control_col = 'phekb_case_control')
+#         working_subset = add_prs_quantile(working_subset,ancestry = a)
+#         if(!is.null(working_subset)){
+#           working_subset = working_subset[,.(case_control,quantile,ancestry_specific_pc1,ancestry_specific_pc2,
+#                                              ancestry_specific_pc3,
+#                                              phekb_age,site,phekb_family_history)]
+#           for(q in unique(working_subset$quantile)){
+#             if(q != '40-60%'){
+#               working_subset_q = working_subset[quantile == q | quantile == '40-60%']
+#               working_subset_q[,quantile:=factor(quantile,levels = c('40-60%',q))]
+#               working_subset_q = clean_column(working_subset_q)
+#               glm_model = run_glm(working_subset_q)
+#               dt = clean_results(glm_model = glm_model, working_subset_q = working_subset_q, prs_col = p,quantile = q,sex = s,ancestry = a, site = st)
+#               stratify_analysis_results = rbindlist(list(dt, stratify_analysis_results), fill=TRUE)
+#               
+#             }
+#           }
+#         }
+#       }
+#     }
+#   }
+# }
+# stratify_analysis_results %>% fwrite('~/2019-PRS-pipeline/workplace/stratify_analysis_site_qt.csv')
+# 
+# # family history
+# stratify_subset_col = c(1,4,5,17:27,28,32,33,50:52,65:82)
+# prs_names = colnames(merged_table)[c(50:52,65:82)]
+# stratify_subset = merged_table[, stratify_subset_col, with = FALSE]
+# stratify_subset = stratify_subset[phekb_case_control %in% c('case', 'control')]
+# stratify_subset = stratify_subset[emerge_ancestry %in% c('eu', 'aa', 'la')]
+# stratify_subset = stratify_subset[sex %in% c('male', 'female')]
+# stratify_analysis_results = NULL
+# for (p in prs_names) {
+#   for (a in c('eu', 'aa', 'la')) {
+#     for (s in c('male', 'female')) {
+#       for (st in c("wo_fx", "w_fx")) {
+#         working_subset = copy(stratify_subset)
+#         working_subset = working_subset[sex == s &
+#                                           emerge_ancestry == a
+#                                         &
+#                                           ((
+#                                             phekb_case_control == 'case' & phekb_family_history == st
+#                                           )
+#                                           |
+#                                             phekb_case_control == 'control'
+#                                           )]
+#         working_subset = prs_norm(working_subset,
+#                                   prs_col = p,
+#                                   case_control_col = 'phekb_case_control')
+#         working_subset = add_prs_quantile(working_subset,ancestry = a)
+#         
+#         if(!is.null(working_subset)){
+#           working_subset = working_subset[,.(case_control,quantile,ancestry_specific_pc1,ancestry_specific_pc2,
+#                                              ancestry_specific_pc3,
+#                                              phekb_age,site,phekb_family_history)]
+#           for(q in unique(working_subset$quantile)){
+#             if(q != '40-60%'){
+#               working_subset_q = working_subset[quantile == q | quantile == '40-60%']
+#               working_subset_q[,quantile:=factor(quantile,levels = c('40-60%',q))]
+#               working_subset_q = clean_column(working_subset_q)
+#               glm_model = run_glm(working_subset_q)
+#               dt = clean_results(glm_model = glm_model, working_subset_q = working_subset_q, prs_col = p,quantile = q,sex = s,ancestry = a, family_history = st)
+#               stratify_analysis_results = rbindlist(list(dt, stratify_analysis_results), fill=TRUE)
+#               
+#             }
+#           }
+#         }
+#       }
+#     }
+#   }
+# }
+# stratify_analysis_results %>% fwrite('~/2019-PRS-pipeline/workplace/stratify_analysis_fx_qt.csv')
+# 
+# # subtype
+# stratify_subset_col = c(1,4,5,17:27,28,32,33,36,44:82)
+# prs_names = colnames(merged_table)[44:82]
+# stratify_subset = merged_table[, stratify_subset_col, with = FALSE]
+# stratify_subset = stratify_subset[phekb_case_control %in% c('case', 'control')]
+# stratify_subset = stratify_subset[emerge_ancestry %in% c('eu', 'aa', 'la')]
+# stratify_subset = stratify_subset[sex %in% c('male', 'female')]
+# stratify_analysis_results = NULL
+# for (p in prs_names) {
+#   for (a in c('eu', 'aa', 'la')) {
+#     for (s in c('male', 'female')) {
+#       for (st in c('positive', 'negative')) {
+#         working_subset = copy(stratify_subset)
+#         working_subset = working_subset[sex == s &
+#                                           emerge_ancestry == a
+#                                         &
+#                                           ((
+#                                             phekb_case_control == 'case' & hormone_receptor_string_value == st
+#                                           )
+#                                           |
+#                                             phekb_case_control == 'control'
+#                                           )]
+#         working_subset = prs_norm(working_subset,
+#                                   prs_col = p,
+#                                   case_control_col = 'phekb_case_control')
+#         working_subset = add_prs_quantile(working_subset,ancestry = a)
+#         
+#         if(!is.null(working_subset)){
+#           working_subset = working_subset[,.(case_control,quantile,ancestry_specific_pc1,ancestry_specific_pc2,
+#                                              ancestry_specific_pc3,
+#                                              phekb_age,site,phekb_family_history,hormone_receptor_string_value)]
+#           for(q in unique(working_subset$quantile)){
+#             if(q != '40-60%'){
+#               working_subset_q = working_subset[quantile == q | quantile == '40-60%']
+#               working_subset_q[,quantile:=factor(quantile,levels = c('40-60%',q))]
+#               working_subset_q = clean_column(working_subset_q)
+#               glm_model = run_glm(working_subset_q)
+#               dt = clean_results(glm_model = glm_model, working_subset_q = working_subset_q, prs_col = p,quantile = q,sex = s,ancestry = a, subtype = st)
+#               stratify_analysis_results = rbindlist(list(dt, stratify_analysis_results), fill=TRUE)
+#               
+#             }
+#           }
+#         }
+#       }
+#     }
+#   }
+# }
+# stratify_analysis_results %>% fwrite('~/2019-PRS-pipeline/workplace/stratify_analysis_subtype_qt.csv')
+# 
+# # density
+# stratify_subset_col = c(1,4,5,17:27,28,32,33,50:52,65:82,38)
+# prs_names = colnames(merged_table)[c(50:52,65:82)]
+# stratify_subset = merged_table[, stratify_subset_col, with = FALSE]
+# stratify_subset = stratify_subset[phekb_case_control %in% c('case', 'control')]
+# stratify_subset = stratify_subset[emerge_ancestry %in% c('eu', 'aa', 'la')]
+# stratify_subset = stratify_subset[sex %in% c('male', 'female')]
+# stratify_analysis_results = NULL
+# for (p in prs_names) {
+#   for (a in c('eu', 'aa', 'la')) {
+#     for (s in c('male', 'female')) {
+#       for (st in c('scattered_fibro_dens',
+#                    'hetero_dense',
+#                    'extremely_dense',
+#                    'entirely_fat')) {
+#         working_subset = copy(stratify_subset)
+#         working_subset = working_subset[sex == s &
+#                                           emerge_ancestry == a
+#                                         &
+#                                           ((phekb_case_control == 'case' & breast_density == st)
+#                                            |
+#                                              phekb_case_control == 'control'
+#                                           )]
+#         working_subset = prs_norm(working_subset,
+#                                   prs_col = p,
+#                                   case_control_col = 'phekb_case_control')
+#         working_subset = add_prs_quantile(working_subset,ancestry = a)
+#         if(!is.null(working_subset)){
+#           for(q in unique(working_subset$quantile)){
+#             working_subset = working_subset[,.(case_control,quantile,ancestry_specific_pc1,ancestry_specific_pc2,
+#                                                ancestry_specific_pc3,
+#                                                phekb_age,site,phekb_family_history,breast_density)]
+#             if(q != '40-60%'){
+#               working_subset_q = working_subset[quantile == q | quantile == '40-60%']
+#               working_subset_q[,quantile:=factor(quantile,levels = c('40-60%',q))]
+#               working_subset_q = clean_column(working_subset_q)
+#               glm_model = run_glm(working_subset_q)
+#               dt = clean_results(glm_model = glm_model, working_subset_q = working_subset_q, prs_col = p,quantile = q,sex = s,ancestry = a, density = st)
+#               stratify_analysis_results = rbindlist(list(dt, stratify_analysis_results), fill=TRUE)
+#               
+#             }
+#           }
+#         }
+#       }
+#     }
+#   }
+# }
+# stratify_analysis_results %>% fwrite('~/2019-PRS-pipeline/workplace/stratify_analysis_density_qt.csv')
 
 

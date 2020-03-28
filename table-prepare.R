@@ -13,11 +13,41 @@ library(tidyr)
 # Get all eMERGE ID and overall PCs.
 overall_PC = fread('~/2019-PRS-pipeline/raw/genomic-data/chr1-22.plink_pca.e123_imputation_sample_manifest.csv')
 colnames(overall_PC)[1] = 'eMERGE_ID'
-colnames(overall_PC)[3] = 'ethnicity'
-colnames(overall_PC)[4] = 'sex'
+colnames(overall_PC)[2] = 'pc_race'
+colnames(overall_PC)[3] = 'pc_ethnicity'
+colnames(overall_PC)[4] = 'pc_sex'
+
+# get demographics.
+demographic = fread('~/2019-PRS-pipeline/raw/phenotypic-data/latest/EMERGE_201907_DEMO_GWAS_1.csv',header = TRUE)
+demographic = demographic[,.(SUBJECT_ID,YEAR_BIRTH,SEX,RACE,ETHNICITY)]
+colnames(demographic)[1:5] = c('eMERGE_ID','year_birth','demo_sex','demo_race','demo_ethnicity')
+demographic$eMERGE_ID = as.integer(demographic$eMERGE_ID)
+demographic[demo_sex == 'C46110', demo_sex := 'female']
+demographic[demo_sex == 'C46109', demo_sex := 'male']
+demographic[!demo_sex %in% c('female','male'), demo_sex := NA]
+demographic[!demo_race %in% c('C16352','C41259','C41260','C41261','C41219'), demo_race := NA]
+demographic[demo_race == 'C16352', demo_race := 'black or african american']
+demographic[demo_race == 'C41259', demo_race := 'american indian or alaska native']
+demographic[demo_race == 'C41260', demo_race := 'asian']
+demographic[demo_race == 'C41261', demo_race := 'white']
+demographic[demo_race == 'C41219', demo_race := 'native hawaiian or other pacific islander']
+demographic[!demo_ethnicity %in% c('C41222','C17459'), demo_ethnicity := NA]
+demographic[demo_ethnicity == 'C41222', demo_ethnicity := 'not hispanic or latino']
+demographic[demo_ethnicity == 'C17459', demo_ethnicity := 'hispanic or latino']
+demographic[demo_race == 'white' & demo_ethnicity!='hispanic or latino', demo_ancestry := 'eu']
+demographic[demo_race == 'black or african american' & demo_ethnicity!='hispanic or latino', demo_ancestry := 'aa']
+demographic[demo_ethnicity=='hispanic or latino', demo_ancestry := 'la']
+
+demo_check = merge(overall_PC,demographic)
+# sex 
+demo_check[pc_sex!=demo_sex,.(eMERGE_ID,pc_sex,demo_sex)] #4
+demo_check[pc_race!=demo_race,.(eMERGE_ID,pc_race,demo_race)] # 252
+demo_check[pc_ethnicity!=demo_ethnicity,.(eMERGE_ID,pc_ethnicity,demo_ethnicity)] # 279
 
 
-# Get eMERGE ancestry and ancestry specific PCs.
+
+
+# Get eMERGE race and ancestry specific PCs.
 PC_AA = fread('~/2019-PRS-pipeline/raw/genomic-data/ancestry_specific_pcas/chr1-22.african.merged.maf.05.LD_1000_50_.7_pruned.no_tri.plink.pca-approx.eigenvec',sep = '\t')
 PC_AA[,eMERGE_ancestry:='AA']
 PC_EU = fread('~/2019-PRS-pipeline/raw/genomic-data/ancestry_specific_pcas/chr1-22.european.merged.maf.05.LD_1000_50_.7_pruned.no_tri.plink.pca-approx.eigenvec',sep = '\t')
@@ -116,11 +146,13 @@ dt5 = merge(dt4,first_bc_icd,by = 'eMERGE_ID',all.x = TRUE)
 dt6 = merge(dt5,family_history,by = 'eMERGE_ID',all.x = TRUE)
 dt7 = merge(dt6,age_demo,by = 'eMERGE_ID',all.x = TRUE)
 dt8 = merge(dt7,prs_scores_dt_wide,by = 'eMERGE_ID',all.x = TRUE)
+dt9 = merge(dt8,demographic,by = 'eMERGE_ID',all.x = TRUE)
 
-colnames(dt8) = tolower(colnames(dt8))
-colnames(dt8)
 
-merged_table = dt8
+colnames(dt9) = tolower(colnames(dt9))
+colnames(dt9)
+
+merged_table = dt9
 for(col in colnames(merged_table)){
   if(class(merged_table[,get(col)]) == 'character'){
     # to lower case.
@@ -133,6 +165,19 @@ merged_table[is.na(icd_family_history)| icd_family_history =='',icd_family_histo
 merged_table[is.na(icd_case_control)|icd_case_control=='',icd_case_control:='control']
 merged_table[is.na(phekb_family_history)|phekb_family_history=='.'|phekb_family_history=='',phekb_family_history:=icd_family_history]
 
+# add a patch to change eMERGE_ancestry to NA if ethnicity is unknown
+# merged_table[ethnicity == 'unknown',emerge_ancestry:=NA]
+
+# add a patch for consistent sex,race,ethnicity
+merged_table[as.character(demo_ancestry) == as.character(emerge_ancestry),
+             demo_is_consist:= 1 ][is.na(demo_is_consist),demo_is_consist:= 0]
 
 merged_table %>% fwrite('~/2019-PRS-pipeline/workplace/merged_table.txt')
 merged_table = fread('~/2019-PRS-pipeline/workplace/merged_table.txt')
+
+
+# summary
+
+merged_table[phekb_sex=='female' & demo_is_consist == 1,
+             .(length(emerge_id)),
+             by=.(phekb_case_control,emerge_ancestry)]
