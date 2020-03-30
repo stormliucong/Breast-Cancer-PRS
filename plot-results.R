@@ -132,25 +132,9 @@ dt = dt %>% mutate(density=case_when(density=='entirely_fat'~'entirely fatty',
                                             density=='hetero_dense'~'hetero dense',
                                             TRUE~'scattered fibro dense'))
 point_estimator_plot(dt,stratify = 'density')
-# stratify analysis by site
+
+# Figure 7
 or = fread('./stratify_analysis_site_or.csv')
 point_estimator_plot(or,stratify = 'site')
 
-
-dt = fread('./sensitivity_analysis_overall_qt.csv')
-quantile_plot(dt)
-dt = fread('~/2019-PRS-pipeline/workplace/sensitivity_analysis_icd_qt.csv')
-quantile_plot(dt)
-dt = fread('~/2019-PRS-pipeline/workplace/sensitivity_analysis_overall_qt.csv')
-quantile_plot(dt)
-dt = fread('~/2019-PRS-pipeline/workplace/stratify_analysis_site_qt.csv')
-quantile_plot(dt)
-dt = fread('~/2019-PRS-pipeline/workplace/stratify_analysis_fx_qt.csv')
-quantile_plot(dt)
-dt = fread('~/2019-PRS-pipeline/workplace/stratify_analysis_subtype_qt.csv')
-quantile_plot(dt)
-dt = fread('~/2019-PRS-pipeline/workplace/stratify_analysis_density_qt.csv')
-quantile_plot(dt)
-
-# auc plot
 
